@@ -65,14 +65,17 @@ model:
   #   punct_post_process: true
 
   text_tokenizer:
-    _target_: nemo.collections.common.tokenizers.text_to_speech.tts_tokenizers.PersianPhonemesTokenizer
-    punct: true
-    stresses: false
-    chars: true
-    apostrophe: false
-    pad_with_space: true
+    _target_: nemo.collections.tts.g2p.models.fa_ir_persian.tokenizer.PersianPhonemesTokenizer
+    # punct: true
+    # stresses: false
+    # chars: true
+    # apostrophe: false
+    # pad_with_space: true
+    use_emotion_tokens: true
+    use_pause_tokens: true
+    use_speed_tokens: true
     g2p:
-      _target_: nemo.collections.tts.g2p.models.fa_ir_persian.PersianG2p
+      _target_: nemo.collections.tts.g2p.models.fa_ir_persian.g2p.PersianG2p
       phoneme_dict: ${phoneme_dict_path}
 
   train_ds:
