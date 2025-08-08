@@ -1,16 +1,13 @@
 import re
 import os
 import sys
-import importlib
-import warnings
 
 parent = os.path.abspath(os.path.join(os.getcwd(), ".."))
 sys.path.append(parent)
-from . import mappings
-from . import patterns
+import nemo.collections.tts.g2p.models.fa_ir_persian.mappings as mappings
+import nemo.collections.tts.g2p.models.fa_ir_persian.patterns as patterns
 
-importlib.reload(mappings)
-importlib.reload(patterns)
+
 # from mappings import PhonemeChars, CharsPhoneme, CommonDiacritics
 # from patterns import RegexPatterns
 from Levenshtein import distance as levdist, editops
@@ -26,6 +23,7 @@ class PersianPhonemizer:
         self.ZWNJ = chr(0x200C)
         self.ZIIR = chr(0x0650)
         self.TASHDID = chr(0x0651)
+        self.SOKUN = chr(0x0652)
         self.dictionary = self.load_dictionary(dictionary_path)
         self.logs = logs
         self.patterns = patterns.RegexPatterns
@@ -65,6 +63,12 @@ class PersianPhonemizer:
         
     def rmv_sarya(self, word):
         return re.sub(r'ۀ', 'ه', word)
+    
+    def has_sokun(self, word):
+        return self.SOKUN in word
+    
+    def rmv_sokun(self, word):
+        return re.sub(rf'{self.SOKUN}', '', word)
 
     def rmv_punctuations(self, text):
         return re.sub(self.punctuations, '', text)
@@ -141,7 +145,11 @@ class PersianPhonemizer:
             parts = word.split(self.ZWNJ)           
             for part in parts:
                 if part in self.dictionary:
-                    phoneme += self.dictionary.get(part)
+                    partPhoneme = self.dictionary.get(part)
+                    if not self.hamnevise and "/" in partPhoneme:
+                        phoneme += partPhoneme.split("/")[0]
+                    else:
+                        phoneme += partPhoneme
                     if self.logs:
                         print(f'ZWNJ part exists: {part} --> {self.dictionary.get(part)}')
                 else:
@@ -165,7 +173,7 @@ class PersianPhonemizer:
         # force overwrite diacritics of word into diacritics of exising
         nword = self.rmv_diacritics(word)
         nword = self.rmv_sarya(nword)
-        
+        nword = self.rmv_sokun(nword)
         
         if self.has_sarya(word) and not self.has_diacritics(word):
             sphoneme = self.dictionary.get(nword)
@@ -185,6 +193,9 @@ class PersianPhonemizer:
         for i, ch in enumerate(wordList):
             if (self.has_diacritics(ch)) and (len(ch) >= len(dwordList[i])):
                 parts.append(ch)
+            elif self.has_sokun(ch):
+                parts.append(dwordList[i])
+                parts.append(self.SOKUN)
             else:
                 parts.append(dwordList[i])
         if self.logs:
@@ -201,6 +212,8 @@ class PersianPhonemizer:
             char = word[i]
             if char in mappings.CommonDiacritics:
                 parts[-1] += char
+            elif char in [self.SOKUN]:
+                parts[-1] += char
             else:
                 parts.append(char)
             i += 1
@@ -210,6 +223,9 @@ class PersianPhonemizer:
 
     def diacritize(self, word):
         phoneme = self.dictionary.get(word, None)
+        if phoneme and not self.hamnevise and "/" in phoneme:
+            phoneme = phoneme.split("/")[0]
+
         rword = ""
         
         if phoneme:
@@ -254,7 +270,10 @@ class PersianPhonemizer:
         else:
             return [word]
 
-
+    def handle_sokun(self, word):
+        # force overwrite diacritics of word into diacritics of exising
+        nword = self.rmv_diacritics(word)
+        nword = self.rmv_sokun(nword)
 
 
 if __name__ == '__main__':
