@@ -95,13 +95,12 @@ class PersianNormalizer:
         return text
 
     def load_verbs(self, file_path=f'{currentpath}/verbs.dict') -> List:
-        phoneme_dict = []
+        verbs_dict = []
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 verb = line.strip()
-                phoneme_dict.append(verb)
-
-        return phoneme_dict
+                verbs_dict.append(verb)
+        return verbs_dict
 
 
     def persian_number(self, text: str) -> str:
@@ -154,7 +153,7 @@ class PersianNormalizer:
           "هامون", "هامان", "هاش", "هاتون", "هاشان", "هاشون", "هایی", "های", "هاس", "ها", "هاست", "هاشو"
         ]
   
-        ha_patterns_replace_space_with_zwnj = [(rf'\s+{ha}(\s?[!؟،؛()\[\]]?)', f'{ZWNJ}{ha} ') for ha in ha_special_list]
+        ha_patterns_replace_space_with_zwnj = [(rf'\s+{ha}(?=(?:\s|[\.!\?؟،,؛()\[\]]|$))', f'{ZWNJ}{ha} ') for ha in ha_special_list]
         ha_patterns_add_zwnj_between_ha_ha = [(rf'ه{ha}(\s?[!؟،؛()\[\]]?)', f'ه{ZWNJ}{ha} ') for ha in ha_special_list]
         for pattern in ha_patterns_replace_space_with_zwnj:
             text = re.sub(pattern[0], pattern[1], text, flags=re.MULTILINE)
@@ -196,20 +195,27 @@ class PersianNormalizer:
     def clean_punctuations(self, text: str) -> str:
         sentence_cleaner_list_of_patterns = [
             (r"\n+", "\n"),
-            (r"\s+،", "،"),
             (r",", "،"),
-            (r"–", " "),
+            (r";", "؛"),
+            (r"#", " هشتگ "),
             (r"=", " برابر است با "),
             (r"،\s*", "، "),
+            (r"/", " یا "),
+            (r'[*\\]', r''), # remove « , », *, /, \
+            (r'\?', r'؟'), # replace ? with ؟
             (r' +', ' '),  # Remove multiple space
-            (r'[«»#"*/\\]', r''), # remove « , », #, ", *, /, \
-            (r'([:;,])\n', r'\1'),
-            (r'\s([،؟.,;:?!](?:\s|$))', r'\1'),  # remove space before punctuations
-            (r'(?<=[،؟.,;:?!])(?=\S)', r' '),   # add space after punctuations
+            (r'([:؛،])\n', r'\1'),
+            (r'\s([،؟.،؛:!](?:\s|$))', r'\1'),  # remove space before punctuations
+            (r'(?<=[،؟.،؛:!])(?=\S)', r' '),   # add space after punctuations
             (r"\s?(\(.*?\))\s?", r" \1 "),  # Add space before and after ( and )
             (r"\s?(\{.*?\})\s?", r" \1 "),  # Add space before and after { and }
             (r"\s?(\[.*?])\s?", r" \1 "),  # Add space before and after [ and ]
-            (r'(\s([?,.!"]))|(?<=[\[(\{])(.*?)(?=[)\]\}])', lambda x: x.group().strip()),   # Remove space after & before '(' and '[' and '{'
+            (r"\s?(«.*?»)\s?", r" \1 "),  # Add space before and after « and »
+            (r"\s?(‹.*?›)\s?", r" \1 "),  # Add space before and after ‹ and ›            
+            (r"\s?(-.*?-)\s?", r" \1 "),  # Add space before and after - and -
+            (r"\s?(‒.*?‒)\s?", r" \1 "),  # Add space before and after ‒ and ‒ (En Dash)
+            (r'\s?(".*?")\s?', r' \1 '),  # Add space before and after " and "
+            (r'(\s([?,.!]))|(?<=[\[(\{])(.*?)(?=[)\]\}])', lambda x: x.group().strip()),   # Remove space after & before '(' and '[' and '{'
             (r" {2,}", " "),  # remove extra spaces
             (r"\n{3,}", "\n\n"),  # remove extra newlines
             (r"\u200c{2,}", "\u200c"),  # remove extra ZWNJs

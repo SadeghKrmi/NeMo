@@ -66,11 +66,7 @@ model:
 
   text_tokenizer:
     _target_: nemo.collections.tts.g2p.models.fa_ir_persian.tokenizer.PersianPhonemesTokenizer
-    # punct: true
-    # stresses: false
-    # chars: true
-    # apostrophe: false
-    # pad_with_space: true
+    punct: true
     use_emotion_tokens: true
     use_pause_tokens: true
     use_speed_tokens: true
