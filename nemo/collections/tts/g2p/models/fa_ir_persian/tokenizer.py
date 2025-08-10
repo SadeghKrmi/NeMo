@@ -8,7 +8,7 @@ import itertools
 import unicodedata
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Any
 
 from nemo.collections.common.tokenizers.text_to_speech.tts_tokenizers import BaseTokenizer
 from nemo.collections.tts.g2p.models.fa_ir_persian.normalizer import PersianNormalizer
@@ -40,55 +40,55 @@ def persian_text_preprocessing(text: str) -> str:
 
     return ntext
 
+## Comment this BaseTokenizer and use original nemo BaseTokenizer
+# class BaseTokenizer(ABC):
+#     PAD, BLANK, OOV = '<pad>', '<blank>', '<oov>'
 
-class BaseTokenizer(ABC):
-    PAD, BLANK, OOV = '<pad>', '<blank>', '<oov>'
+#     def __init__(self, tokens, *, pad=PAD, blank=BLANK, oov=OOV, sep='', add_blank_at=None):
+#         """Abstract class for creating an arbitrary tokenizer to convert string to list of int tokens.
+#         Args:
+#             tokens: List of tokens.
+#             pad: Pad token as string.
+#             blank: Blank token as string.
+#             oov: OOV token as string.
+#             sep: Separation token as string.
+#             add_blank_at: Add blank to labels in the specified order ("last") or after tokens (any non None),
+#                 if None then no blank in labels.
+#         """
+#         super().__init__()
 
-    def __init__(self, tokens, *, pad=PAD, blank=BLANK, oov=OOV, sep='', add_blank_at=None):
-        """Abstract class for creating an arbitrary tokenizer to convert string to list of int tokens.
-        Args:
-            tokens: List of tokens.
-            pad: Pad token as string.
-            blank: Blank token as string.
-            oov: OOV token as string.
-            sep: Separation token as string.
-            add_blank_at: Add blank to labels in the specified order ("last") or after tokens (any non None),
-                if None then no blank in labels.
-        """
-        super().__init__()
+#         tokens = list(tokens)
+#         self.pad, tokens = len(tokens), tokens + [pad]  # Padding
 
-        tokens = list(tokens)
-        self.pad, tokens = len(tokens), tokens + [pad]  # Padding
+#         if add_blank_at is not None:
+#             self.blank, tokens = len(tokens), tokens + [blank]  # Reserved for blank from asr-model
+#         else:
+#             self.blank = None
 
-        if add_blank_at is not None:
-            self.blank, tokens = len(tokens), tokens + [blank]  # Reserved for blank from asr-model
-        else:
-            self.blank = None
+#         self.oov, tokens = len(tokens), tokens + [oov]  # Out Of Vocabulary
 
-        self.oov, tokens = len(tokens), tokens + [oov]  # Out Of Vocabulary
+#         if add_blank_at == "last":
+#             tokens[-1], tokens[-2] = tokens[-2], tokens[-1]
+#             self.oov, self.blank = self.blank, self.oov
 
-        if add_blank_at == "last":
-            tokens[-1], tokens[-2] = tokens[-2], tokens[-1]
-            self.oov, self.blank = self.blank, self.oov
+#         self.tokens = tokens
+#         self.sep = sep
 
-        self.tokens = tokens
-        self.sep = sep
+#         self._util_ids = {self.pad, self.blank, self.oov}
+#         self._token2id = {l: i for i, l in enumerate(tokens)}
+#         self._id2token = tokens
 
-        self._util_ids = {self.pad, self.blank, self.oov}
-        self._token2id = {l: i for i, l in enumerate(tokens)}
-        self._id2token = tokens
+#     def __call__(self, text: str) -> List[int]:
+#         return self.encode(text)
 
-    def __call__(self, text: str) -> List[int]:
-        return self.encode(text)
+#     @abstractmethod
+#     def encode(self, text: str) -> List[int]:
+#         """Turns str text into int tokens."""
+#         pass
 
-    @abstractmethod
-    def encode(self, text: str) -> List[int]:
-        """Turns str text into int tokens."""
-        pass
-
-    def decode(self, tokens: List[int]) -> str:
-        """Turns ints tokens into str text."""
-        return self.sep.join(self._id2token[t] for t in tokens if t not in self._util_ids)
+#     def decode(self, tokens: List[int]) -> str:
+#         """Turns ints tokens into str text."""
+#         return self.sep.join(self._id2token[t] for t in tokens if t not in self._util_ids)
 
 
 class PersianPhonemesTokenizer(BaseTokenizer):
