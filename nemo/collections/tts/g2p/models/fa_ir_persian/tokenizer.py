@@ -19,67 +19,76 @@ logger = logging.getLogger(__name__)
 
 normalizer = PersianNormalizer()
 
-def persian_text_preprocessing(text: str) -> str:
-    """
-    Preprocess Persian text with normalization.
-    
-    Args:
-        text (str): the original input sentence.
-    
-    Returns:
-        normalized text (str).
-    """
+def persian_text_normalizer(text: str) -> str:
     return normalizer.normalize(text)
 
+def persian_text_preprocessing(text: str) -> str:
+    ntext = persian_text_normalizer(text)
 
-# class BaseTokenizer(ABC):
-#     PAD, BLANK, OOV = '<pad>', '<blank>', '<oov>'
+    # handle brackets, pranthesis, etc...
+    text_preprocessing_list_of_patterns = [
+        (r'\((.*?)\)', r'،\1،'),    # convert (text) to comma + text + comma
+        (r'\[(.*?)\]', r'،\1،'),    # convert [text] to comma + text + comma
+        (r'\{(.*?)\}', r'،\1،'),    # convert {text} to comma + text + comma
+        (r'"(.*?)"', r'،\1'),       # convert "text" to comma + text
+        (r'‹(.*?)›', r' \1 '),    # convert ‹text› to text 
+        (r'«(.*?)»', r' \1 '),    # convert «text» to text
+    ]
+    
+    for pattern in text_preprocessing_list_of_patterns:
+        ntext = re.sub(pattern[0], pattern[1], ntext)
 
-#     def __init__(self, tokens, *, pad=PAD, blank=BLANK, oov=OOV, sep='', add_blank_at=None):
-#         """Abstract class for creating an arbitrary tokenizer to convert string to list of int tokens.
-#         Args:
-#             tokens: List of tokens.
-#             pad: Pad token as string.
-#             blank: Blank token as string.
-#             oov: OOV token as string.
-#             sep: Separation token as string.
-#             add_blank_at: Add blank to labels in the specified order ("last") or after tokens (any non None),
-#                 if None then no blank in labels.
-#         """
-#         super().__init__()
+    return ntext
 
-#         tokens = list(tokens)
-#         self.pad, tokens = len(tokens), tokens + [pad]  # Padding
 
-#         if add_blank_at is not None:
-#             self.blank, tokens = len(tokens), tokens + [blank]  # Reserved for blank from asr-model
-#         else:
-#             self.blank = None
+class BaseTokenizer(ABC):
+    PAD, BLANK, OOV = '<pad>', '<blank>', '<oov>'
 
-#         self.oov, tokens = len(tokens), tokens + [oov]  # Out Of Vocabulary
+    def __init__(self, tokens, *, pad=PAD, blank=BLANK, oov=OOV, sep='', add_blank_at=None):
+        """Abstract class for creating an arbitrary tokenizer to convert string to list of int tokens.
+        Args:
+            tokens: List of tokens.
+            pad: Pad token as string.
+            blank: Blank token as string.
+            oov: OOV token as string.
+            sep: Separation token as string.
+            add_blank_at: Add blank to labels in the specified order ("last") or after tokens (any non None),
+                if None then no blank in labels.
+        """
+        super().__init__()
 
-#         if add_blank_at == "last":
-#             tokens[-1], tokens[-2] = tokens[-2], tokens[-1]
-#             self.oov, self.blank = self.blank, self.oov
+        tokens = list(tokens)
+        self.pad, tokens = len(tokens), tokens + [pad]  # Padding
 
-#         self.tokens = tokens
-#         self.sep = sep
+        if add_blank_at is not None:
+            self.blank, tokens = len(tokens), tokens + [blank]  # Reserved for blank from asr-model
+        else:
+            self.blank = None
 
-#         self._util_ids = {self.pad, self.blank, self.oov}
-#         self._token2id = {l: i for i, l in enumerate(tokens)}
-#         self._id2token = tokens
+        self.oov, tokens = len(tokens), tokens + [oov]  # Out Of Vocabulary
 
-#     def __call__(self, text: str) -> List[int]:
-#         return self.encode(text)
+        if add_blank_at == "last":
+            tokens[-1], tokens[-2] = tokens[-2], tokens[-1]
+            self.oov, self.blank = self.blank, self.oov
 
-#     @abstractmethod
-#     def encode(self, text: str) -> List[int]:
-#         """Turns str text into int tokens."""
-#         pass
+        self.tokens = tokens
+        self.sep = sep
 
-#     def decode(self, tokens: List[int]) -> str:
-#         """Turns ints tokens into str text."""
-#         return self.sep.join(self._id2token[t] for t in tokens if t not in self._util_ids)
+        self._util_ids = {self.pad, self.blank, self.oov}
+        self._token2id = {l: i for i, l in enumerate(tokens)}
+        self._id2token = tokens
+
+    def __call__(self, text: str) -> List[int]:
+        return self.encode(text)
+
+    @abstractmethod
+    def encode(self, text: str) -> List[int]:
+        """Turns str text into int tokens."""
+        pass
+
+    def decode(self, tokens: List[int]) -> str:
+        """Turns ints tokens into str text."""
+        return self.sep.join(self._id2token[t] for t in tokens if t not in self._util_ids)
 
 
 class PersianPhonemesTokenizer(BaseTokenizer):
@@ -103,7 +112,7 @@ class PersianPhonemesTokenizer(BaseTokenizer):
     OTHER_PUNCT = (
         '/', '"', '(', ')', '[', ']', 
         '{', '}', '«', '»', '"', '"',
-        '‹', '›', ';', ','
+        '‹', '›', '؛', '،'
     )
     
     # Emotion and style control tokens
@@ -167,8 +176,6 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         self,
         g2p,
         punct=True,
-        stresses=False,
-        chars=False,
         *,
         space=' ',
         silence=None,
@@ -187,8 +194,6 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         Args:
             g2p: Grapheme to phoneme module.
             punct: Whether to reserve grapheme for basic punctuation or not.
-            stresses: Whether to use phonemes codes with stresses (0-2) or not.
-            chars: Whether to additionally use chars together with phonemes.
             space: Space token as string.
             silence: Silence token as string (will be disabled if it is None).
             apostrophe: Whether to use apostrophe or not.
@@ -205,59 +210,55 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         if hasattr(g2p, "phoneme_probability"):
             self.phoneme_probability = g2p.phoneme_probability
         
+        # Build token vocabulary with FIXED order regardless of switches
         tokens = []
         self.space, tokens = len(tokens), tokens + [space]  # Space
 
         if silence is not None:
             self.silence, tokens = len(tokens), tokens + [silence]  # Silence
+        else:
+            self.silence = None
 
         # Add consonants and vowels
         tokens.extend(self.CONSONANTS)
         vowels = list(self.VOWELS)
 
-        if stresses:
-            vowels = [f'{p}{s}' for p, s in itertools.product(vowels, (0, 1, 2))]
         tokens.extend(vowels)
-
-        # Add valid phoneme system characters if needed
-        if chars or self.phoneme_probability is not None:
-            if not chars:
-                logging.warning(
-                    "phoneme_probability was not None, characters will be enabled even though "
-                    "chars was set to False."
-                )
-            # Only add characters that are part of the Persian phoneme system
-            tokens.extend(sorted(self.VALID_PHONEME_CHARS))
         
         if apostrophe:
             tokens.append("'")  # Apostrophe
         
-        # Add control tokens
-        if use_emotion_tokens:
-            tokens.extend(self.EMOTION_TOKENS)
-        
-        if use_pause_tokens:
-            tokens.extend(self.PAUSE_TOKENS)
-            tokens.extend(self.PUNCT_CONTROL_TOKENS)  # Add punctuation-derived control tokens
-            
-        if use_speed_tokens:
-            tokens.extend(self.SPEED_TOKENS)
+        # ALWAYS add ALL control tokens to maintain consistent IDs
+        # They will always have the same position in the vocabulary
+        tokens.extend(self.EMOTION_TOKENS)
+        tokens.extend(self.PAUSE_TOKENS)
+        tokens.extend(self.PUNCT_CONTROL_TOKENS)
+        tokens.extend(self.SPEED_TOKENS)
         
         # Add punctuation
         if punct:
-            # Add mapped punctuation tokens (already added via pause tokens)
-            # Add other punctuation marks
             tokens.extend(self.OTHER_PUNCT)
         
         super().__init__(tokens, oov=oov, sep=sep, add_blank_at=add_blank_at)
 
-        self.chars = chars if self.phoneme_probability is None else True
+        # Store configuration for which tokens are actually active
         self.punct = punct
-        self.stresses = stresses
         self.pad_with_space = pad_with_space
         self.use_emotion_tokens = use_emotion_tokens
         self.use_pause_tokens = use_pause_tokens
         self.use_speed_tokens = use_speed_tokens
+
+        # Create sets of active tokens for faster lookup
+        self._active_tokens = set(self.tokens)
+        
+        # Remove inactive control tokens from active set (but keep them in vocabulary)
+        if not use_emotion_tokens:
+            self._active_tokens -= set(self.EMOTION_TOKENS)
+        if not use_pause_tokens:
+            self._active_tokens -= set(self.PAUSE_TOKENS)
+            self._active_tokens -= set(self.PUNCT_CONTROL_TOKENS)
+        if not use_speed_tokens:
+            self._active_tokens -= set(self.SPEED_TOKENS)
 
         self.text_preprocessing_func = text_preprocessing_func
         self.g2p = g2p
@@ -266,7 +267,7 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         """Encode text to token IDs."""
         text = self.text_preprocessing_func(text)
         
-        # Pre-process to handle Persian punctuation
+        # Pre-process to handle Persian punctuation only if pause tokens are active
         if self.use_pause_tokens:
             text = self._apply_punct_mappings(text)
         
@@ -277,8 +278,12 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         processed_segments = []
         for segment in segments:
             if segment.startswith('<') and segment.endswith('>'):
-                # This is a control token, keep as is
-                processed_segments.append([segment])
+                # This is a control token, check if it's active
+                if segment in self._active_tokens:
+                    processed_segments.append([segment])
+                else:
+                    # Skip inactive control tokens
+                    logging.debug(f"Skipping inactive control token: {segment}")
             else:
                 # This is text, process through G2P
                 if segment.strip():  # Only process non-empty segments
@@ -312,8 +317,6 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         Returns:
             Tuple of (segments, control_tokens) where segments is a list of text/token segments
         """
-        import re
-        
         # Pattern to match control tokens
         control_pattern = r'(<[^>]+>)'
         
@@ -335,7 +338,7 @@ class PersianPhonemesTokenizer(BaseTokenizer):
             g2p_text: G2P's output, mixture of phonemes and graphemes
             raw_text: original raw input
         """
-        ps, space, tokens = [], self.tokens[self.space], set(self.tokens)
+        ps, space, tokens = [], self.tokens[self.space], self._active_tokens
         
         for p in g2p_text:
             # Handle control tokens first
@@ -343,13 +346,9 @@ class PersianPhonemesTokenizer(BaseTokenizer):
                 if p in tokens:
                     ps.append(p)
                 else:
-                    # Log warning for unknown control token
-                    logging.warning(f"Unknown control token: [{p}]. Skipping.")
+                    # Log warning for unknown or inactive control token
+                    logging.debug(f"Control token not active or unknown: [{p}]. Skipping.")
                 continue
-            
-            # Remove stress if not needed
-            if p.isalnum() and len(p) == 3 and not self.stresses:
-                p = p[:2]
 
             # Handle space
             if p == space:
@@ -394,17 +393,104 @@ class PersianPhonemesTokenizer(BaseTokenizer):
             
         return control_tokens
     
+    def export_tokenizer_mappings(self, filepath: Optional[str] = None) -> Dict[str, Any]:
+        """Export tokenizer vocabulary and mappings for inspection or external use.
+        
+        Args:
+            filepath: Optional filepath to save the mappings as JSON
+            
+        Returns:
+            Dictionary containing all tokenizer mappings and metadata
+        """
+        mappings = {
+            'metadata': {
+                'total_tokens': len(self.tokens),
+                'vocab_size': len(self._token2id),
+                'special_tokens': {
+                    'pad': {'token': self.tokens[self.pad] if self.pad < len(self.tokens) else None, 
+                            'id': self.pad},
+                    'blank': {'token': self.tokens[self.blank] if self.blank and self.blank < len(self.tokens) else None, 
+                             'id': self.blank},
+                    'oov': {'token': self.tokens[self.oov] if self.oov < len(self.tokens) else None, 
+                           'id': self.oov},
+                    'space': {'token': self.tokens[self.space] if hasattr(self, 'space') else None, 
+                             'id': self.space if hasattr(self, 'space') else None},
+                    'silence': {'token': self.tokens[self.silence] if hasattr(self, 'silence') and self.silence else None,
+                               'id': self.silence if hasattr(self, 'silence') else None}
+                },
+                'configuration': {
+                    'punct': self.punct,
+                    'use_emotion_tokens': self.use_emotion_tokens,
+                    'use_pause_tokens': self.use_pause_tokens,
+                    'use_speed_tokens': self.use_speed_tokens,
+                    'pad_with_space': self.pad_with_space
+                }
+            },
+            'token_to_id': self._token2id,
+            'id_to_token': {i: token for i, token in enumerate(self._id2token)},
+            'active_tokens': sorted(list(self._active_tokens)),
+            'token_categories': {
+                'consonants': list(self.CONSONANTS),
+                'vowels': list(self.VOWELS),
+                'emotion_tokens': list(self.EMOTION_TOKENS),
+                'pause_tokens': list(self.PAUSE_TOKENS),
+                'punct_control_tokens': list(self.PUNCT_CONTROL_TOKENS),
+                'speed_tokens': list(self.SPEED_TOKENS),
+                'other_punct': list(self.OTHER_PUNCT),
+                'persian_punct_map': dict(self.PERSIAN_PUNCT_MAP)
+            },
+            'phoneme_chars': sorted(list(self.VALID_PHONEME_CHARS))
+        }
+        
+        if filepath:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(mappings, f, ensure_ascii=False, indent=2)
+            logging.info(f"Tokenizer mappings exported to {filepath}")
+        
+        return mappings
+    
+    def verify_consistency(self, other_config: Dict[str, bool]) -> bool:
+        """Verify that token IDs remain consistent with different configurations.
+        
+        Args:
+            other_config: Dictionary with keys like 'use_emotion_tokens', 'use_pause_tokens', etc.
+            
+        Returns:
+            True if token IDs are consistent, False otherwise
+        """
+        # Check that all tokens have the same IDs regardless of configuration
+        for token in self.tokens:
+            if token in self._token2id:
+                # This token should always have the same ID
+                expected_id = self._token2id[token]
+                actual_id = self.tokens.index(token)
+                if expected_id != actual_id:
+                    logging.error(f"Token '{token}' has inconsistent ID: expected {expected_id}, got {actual_id}")
+                    return False
+        
+        logging.info("Token ID consistency verified successfully")
+        return True
+    
     def debug_tokens(self, text: str):
         """Debug method to show token processing steps."""
         print(f"Original text: {text}")
         
         # Check if control tokens are in vocabulary
         print("\nControl tokens in vocabulary:")
-        for token in self.EMOTION_TOKENS + self.PAUSE_TOKENS + self.SPEED_TOKENS:
-            if token in self._token2id:
-                print(f"  {token}: ID {self._token2id[token]}")
-            else:
-                print(f"  {token}: NOT IN VOCABULARY!")
+        for category, tokens in [
+            ('Emotions', self.EMOTION_TOKENS),
+            ('Pauses', self.PAUSE_TOKENS),
+            ('Punct Controls', self.PUNCT_CONTROL_TOKENS),
+            ('Speeds', self.SPEED_TOKENS)
+        ]:
+            print(f"\n{category}:")
+            for token in tokens:
+                if token in self._token2id:
+                    active = token in self._active_tokens
+                    status = "ACTIVE" if active else "INACTIVE"
+                    print(f"  {token}: ID {self._token2id[token]} [{status}]")
+                else:
+                    print(f"  {token}: NOT IN VOCABULARY!")
         
         # Show processing steps
         text = self.text_preprocessing_func(text)
@@ -416,6 +502,11 @@ class PersianPhonemesTokenizer(BaseTokenizer):
         
         segments, _ = self._extract_control_tokens(text)
         print(f"\nSegments: {segments}")
+        
+        # Show encoding
+        encoded = self.encode(text)
+        print(f"\nEncoded IDs: {encoded}")
+        print(f"Decoded: {self.decode(encoded)}")
         
         return segments
     
