@@ -19,6 +19,7 @@ import unicodedata
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import List, Optional, Union, Tuple, Dict
+from nemo.utils.decorators import experimental
 
 from transformers import PreTrainedTokenizerBase
 
@@ -692,7 +693,7 @@ class EnglishPhonemesTokenizer(BaseTokenizer):
                 self.g2p.phoneme_probability = self.phoneme_probability
 
 
-<<<<<<< HEAD
+
 class PersianPhonemesTokenizer(BaseTokenizer):
     # fmt: off
 
@@ -865,8 +866,7 @@ class PersianPhonemesTokenizer(BaseTokenizer):
 
 
 
-=======
->>>>>>> b4dcce708e (unify the persian functions)
+
 @experimental
 class IPATokenizer(BaseTokenizer):
     """General-purpose IPA-based tokenizer.
